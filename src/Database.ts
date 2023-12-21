@@ -41,27 +41,28 @@ export class Database {
   }
 
   public async CreateTables(tables: TableModel[]): Promise<boolean> {
-    this.db.serialize(async () => {
-      tables.forEach((table) => {
-        this.CreateTable(table);
+    return await new Promise((resolve, reject) => {
+      tables.forEach(async (table) => {
+        await this.CreateTable(table);
       });
+      resolve(true);
     });
-    return true;
   }
 
   public async CreateTable(table: TableModel): Promise<boolean> {
-    await this.db.serialize(async () => {
-      const columns: string = table.columns.map((column) => { return `${column.name} ${column.type}`; }).join(', ')
-      const query = `CREATE TABLE IF NOT EXISTS ${table.name} (id INTEGER PRIMARY KEY${columns ? `, ${columns}` : ''})`;
-      await this.db.run(query, (async (err) => {
-        console.log("here");
-        if (err) {
-          console.trace(err);
-          return false;
-        }
-        this.tables.push(table);
-      }));
-      return true;
+    return await new Promise((resolve, reject) => {
+      this.db.serialize(() => {
+        const columns: string = table.columns.map((column) => { return `${column.name} ${column.type}`; }).join(', ')
+        const query = `CREATE TABLE IF NOT EXISTS ${table.name} (id INTEGER PRIMARY KEY${columns ? `, ${columns}` : ''})`;
+        this.db.run(query, ((err) => {
+          if (err) {
+            console.trace(err);
+            reject(false)
+          }
+          this.tables.push(table);
+          resolve(true);
+        }));
+      });
     });
   }
 }

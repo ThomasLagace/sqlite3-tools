@@ -1,0 +1,27 @@
+{
+  "name": "sqlite3-tools",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ThomasLagace/sqlite3-tools.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ThomasLagace/sqlite3-tools/issues"
+  },
+  "homepage": "https://github.com/ThomasLagace/sqlite3-tools#readme",
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "sqlite3": "^5.1.6"
+  }
+}

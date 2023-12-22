@@ -6,7 +6,10 @@ const testing = async () => {
     console.log("log: ", await db.CreateTable({ 
         name: "test", 
         columns: [
+            // {name: "id", type: "string"},
             {name: "boolTest", type: "boolean", required: true}, 
+            {name: "arrayTest", type: "array"}, 
+            {name: "arrayTest", type: "array"}, 
             {name: "arrayTest", type: "array"}, 
             {name: "dateTest", type:"date"},
             {name: "objectTest", type:"object"},
@@ -15,15 +18,15 @@ const testing = async () => {
             {name: "realTest", type:"real"},
         ]
     }));
-
+    
     console.log("log: ", 
         await db.InsertRow("test",
         {
-            boolTest: "asdf",
+            boolTest: true,
             arrayTest: [1, 2, 3],
             dateTest: new Date(),
             objectTest: {hello: "world"},
-            stringTest: "LSDKFJLKJDFS123",
+            stringTest: "'''''\"`LSDKFJLKJDFS123",
             intTest: 1,
             realTest: 2.56,
         })

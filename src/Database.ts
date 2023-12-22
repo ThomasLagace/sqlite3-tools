@@ -1,7 +1,7 @@
 import sqlite3 from 'sqlite3'
 
-export interface Error {
-  error: boolean,
+export interface DatabaseError {
+  error?: boolean,
   message?: string
 }
 
@@ -45,95 +45,107 @@ export class Database {
     }
   }
 
-  public async CreateTables(tables: TableModel[]): Promise<Error> {
+  public async CreateTables(tables: TableModel[]): Promise<DatabaseError> {
     return await new Promise((resolve, reject) => {
       tables.forEach(async (table) => {
-        const errorStatus = await this.CreateTable(table);
-        if (errorStatus.error) {
-          reject({ error: true, message: errorStatus.message })
+        const errorMessage = await this.CreateTable(table);
+        if (errorMessage) {
+          reject({ error: true, message: errorMessage.message });
         }
       });
-      resolve({ error: false })
+      resolve({})
     });
   }
 
-  public async CreateTable(table: TableModel): Promise<Error> {
-    return await new Promise((resolve, reject) => {
+  public async CreateTable(table: TableModel): Promise<DatabaseError> {
+    if (table.columns.some(column => column.name === 'id')) {
+      return { error: true, message: 'Tables already come with the id as primary keys' };
+    }
+
+    if (this.tables.some(dbTable => dbTable.name === table.name)) {
+      return { error: true, message: `Table ${table.name} already exists` };
+    }
+    
+    if (table.columns.some((column, index) => table.columns.findIndex(c => c.name === column.name) !== index)) {
+      return { error: true, message: 'Duplicate columns names in the table' };
+    }
+
+    const columns = table.columns.map((column) => {
+      return `${column.name} ${this.columnTypeToSqlType(column.type)}${column.required ? ' NOT NULL' : ''}`;
+    });
+
+    const columnsQuery = ['id INTEGER PRIMARY KEY', ...columns].join(', ');
+    const query = `CREATE TABLE IF NOT EXISTS ${table.name} (${columnsQuery})`;
+    return await new Promise(resolve => {
       this.db.serialize(() => {
-        const columns = table.columns.map((column) => { return `${column.name} ${this.columnTypeToSqlType(column.type)}${column.required ? ' NOT NULL' : ''}`; }).join(', ')
-        const query = `CREATE TABLE IF NOT EXISTS ${table.name} (id INTEGER PRIMARY KEY${columns ? `, ${columns}` : ''})`;
         this.db.run(query, ((err) => {
-          if (err) reject({ error: true, message: err })
+          if (err) return resolve({ error: true, message: err.message });
           this.tables.push(table);
-          resolve({ error: false });
+          return resolve({});
         }));
       });
     });
   }
 
-  public async IsDataTypesValid(column: ColumnModel, data: any): Promise<boolean> {
+  public IsDataTypesValid(column: ColumnModel, data: any): Promise<boolean> {
     const dataType = typeof data;
-    if (dataType === "undefined" && !column.required) return true;
+    if (dataType === "undefined" && !column.required) return Promise.resolve(true);
     switch (column.type) {
       case 'array':
-        return !!Array.isArray(data);
+        return Promise.resolve(Array.isArray(data));
       case 'object':
-        return dataType === 'object';
+        return Promise.resolve(dataType === 'object');
       case 'date':
-        return data instanceof Date;
+        return Promise.resolve(data instanceof Date);
       case 'boolean':
-        return dataType === 'boolean';
+        return Promise.resolve(dataType === 'boolean');
       case 'int':
-        return dataType === 'number' && data % 1 === 0;
+        return Promise.resolve(dataType === 'number' && data % 1 === 0);
       case 'real':
-        return dataType === 'number'
+        return Promise.resolve(dataType === 'number');
       case 'string':
-        return dataType === 'string'
+        return Promise.resolve(dataType === 'string');
       default:
-        return false;
+        return Promise.resolve(false);
     }
   }
 
-  public async InsertRow(tableName: string, data: object): Promise<Error> {
-    const tableIndex = this.tables.findIndex((t) => t.name === tableName);
-    if (tableIndex === -1) return { error: true, message: `Table ${tableName} does not exist` };
-    const table = this.tables[tableIndex];
+  public async InsertRow(tableName: string, data: { [key: string]: any }): Promise<DatabaseError> {
+    const table = this.tables.find((t) => t.name === tableName);
+    if (!table) return { error: true, message: `Table ${tableName} does not exist` };
 
     for (const column of table.columns) {
       if (!(column.name in data) && column.required) {
         return { error: true, message: `Column ${column.name} is required` };
       }
 
-      const dataColumn = (data as { [key: string]: any })[column.name];
-      if (!await this.IsDataTypesValid(column, dataColumn)) {
+      const dataColumn = data[column.name];
+      if (!this.IsDataTypesValid(column, dataColumn)) {
         return { error: true, message: `Invalid data type: ${column.name} is ${column.type} but got ${column.type === 'int' && dataColumn % 1 !== 0 ? 'real' : typeof dataColumn}`};
       }
     }
 
-    const columns = table.columns.map((column) => column.name).join(', ');
+    const columns = table.columns.map((column) => column.name);
     const values = table.columns.map((column) => {
-      const dataColumn = (data as { [key: string]: any })[column.name];
+      const dataColumn = data[column.name];
       if (dataColumn === undefined) return 'NULL';
       switch (column.type) {
         case 'array':
         case 'object':
-          return `'${JSON.stringify(dataColumn)}'`;
+          return JSON.stringify(dataColumn);
         case 'date':
-          return `"${dataColumn.toISOString()}"`;
-        case 'string':
-          return `"${dataColumn}"`;
+          return dataColumn.toISOString();
         default:
           return dataColumn;
       }
-    }).join(', ');
+    });
     
-    const query = `INSERT INTO ${tableName} (${columns}) VALUES (${values})`;
-    console.log(query)
+    const query = `INSERT INTO ${table.name} (${columns.join(', ')}) VALUES (${values.map(() => '?').join(', ')})`;
     return new Promise((resolve, reject) => {
       this.db.serialize(() => {
-        this.db.run(query, (err) => {
-          if (err) reject({ error: true, message: err});
-          resolve({ error: false });
+        this.db.run(query, values,(err) => {
+          if (err) return resolve({ error: true, message: err.message});
+          return resolve({});
         });
       });
     });

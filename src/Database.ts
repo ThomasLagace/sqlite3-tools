@@ -45,10 +45,14 @@ export class Database {
     }
   }
 
-  public async CreateTables(tables: TableModel[]): Promise<DatabaseError> {
+  public getTableModel(tableName: string): Promise<TableModel | undefined> {
+    return Promise.resolve(this.tables.find((t) => t.name === tableName));
+  }
+
+  public async createTables(tables: TableModel[]): Promise<DatabaseError> {
     return await new Promise((resolve, reject) => {
       tables.forEach(async (table) => {
-        const errorMessage = await this.CreateTable(table);
+        const errorMessage = await this.createTable(table);
         if (errorMessage) {
           reject({ error: true, message: errorMessage.message });
         }
@@ -57,13 +61,13 @@ export class Database {
     });
   }
 
-  public async CreateTable(table: TableModel): Promise<DatabaseError> {
+  public async createTable(table: TableModel): Promise<DatabaseError> {
     if (table.columns.some(column => column.name === 'id')) {
       return { error: true, message: 'Tables already come with the id as primary keys' };
     }
 
     if (this.tables.some(dbTable => dbTable.name === table.name)) {
-      return { error: true, message: `Table ${table.name} already exists` };
+      return { error: true, message: `Table "${table.name}" already exists` };
     }
     
     if (table.columns.some((column, index) => table.columns.findIndex(c => c.name === column.name) !== index)) {
@@ -87,7 +91,7 @@ export class Database {
     });
   }
 
-  public IsDataTypesValid(column: ColumnModel, data: any): Promise<boolean> {
+  public isDataTypesValid(column: ColumnModel, data: any): Promise<boolean> {
     const dataType = typeof data;
     if (dataType === "undefined" && !column.required) return Promise.resolve(true);
     switch (column.type) {
@@ -110,17 +114,29 @@ export class Database {
     }
   }
 
-  public async InsertRow(tableName: string, data: { [key: string]: any }): Promise<DatabaseError> {
-    const table = this.tables.find((t) => t.name === tableName);
-    if (!table) return { error: true, message: `Table ${tableName} does not exist` };
+  public async insertRows(tablesNames: string[], data: { [key: string]: any}[]): Promise<DatabaseError> {
+    return await new Promise((resolve, reject) => {
+      tablesNames.forEach(async (table, index) => {
+        const errorMessage = await this.insertRow(table, data[index]);
+        if (errorMessage) {
+          reject({ error: true, message: errorMessage.message });
+        }
+      });
+      resolve({})
+    });
+  }
 
+  public async insertRow(tableName: string, data: { [key: string]: any }): Promise<DatabaseError> {
+    const table = await this.getTableModel(tableName);
+    if (!table) return { error: true, message: `Table "${tableName}" does not exist` };
+    
     for (const column of table.columns) {
       if (!(column.name in data) && column.required) {
         return { error: true, message: `Column ${column.name} is required` };
       }
 
       const dataColumn = data[column.name];
-      if (!this.IsDataTypesValid(column, dataColumn)) {
+      if (!this.isDataTypesValid(column, dataColumn)) {
         return { error: true, message: `Invalid data type: ${column.name} is ${column.type} but got ${column.type === 'int' && dataColumn % 1 !== 0 ? 'real' : typeof dataColumn}`};
       }
     }
@@ -147,6 +163,19 @@ export class Database {
           if (err) return resolve({ error: true, message: err.message});
           return resolve({});
         });
+      });
+    });
+  }
+
+  public async dropTable(tableName: string): Promise<DatabaseError> {
+    const table = await this.getTableModel(tableName);
+    if (!table) return { error: true, message: `Table "${tableName}" does not exist` };
+
+    return new Promise((resolve, reject) => {
+      this.db.run(`DROP TABLE ${tableName}`, (err) => {
+        if (err) return resolve({ error: true, message: err.message });
+        this.tables = this.tables.filter(t => t.name !== tableName);
+        return resolve({});
       });
     });
   }

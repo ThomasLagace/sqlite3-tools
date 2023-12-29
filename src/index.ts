@@ -42,9 +42,11 @@ const testing = async () => {
     })
   );
 
-  console.log('Log: ', await db.getTable('test', [ 'boolTest', 'arrayTest', 'stringTest' ], undefined, 10));
+  console.log('Log1: ', await db.getTable('test', [ 'boolTest', 'arrayTest', 'stringTest' ], undefined, 10));
 
-  // console.log(db.tables);
+  console.log('Log2: ', await db.deleteRowByID('test', 6));
+
+  console.log('Log3: ', await db.getTable('test'));
 
   db.db.close();
 }

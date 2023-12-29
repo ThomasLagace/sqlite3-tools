@@ -182,15 +182,19 @@ export class Database {
     });
   }
 
-  public async getTable(tableName: string, columnsName: string[] | undefined = undefined, sort: { columnName: string, sortType: 'ASC' | 'DESC' } | undefined = undefined, limit: number = 1): Promise<Object[] | DatabaseError> {
+  public async getTable(tableName: string, columnsName: string[] | undefined = undefined, sort: { columnName: string, sortType: 'ASC' | 'DESC' } | undefined = undefined, limit: number | undefined = undefined): Promise<Object[] | DatabaseError> {
     const table = await this.getTableModel(tableName);
     if (!table) return { error: true, message: `Table "${tableName}" does not exist` };
 
-    if (limit < 1) {
+    if (limit !== undefined && limit < 1) {
       return { error: true, message: `Limit must be greater than 0 but got "${limit}"`}
     }
-
+    
     const tableColumnsName = table.columns.map(column => column.name);
+    if (columnsName === undefined) {
+      columnsName = tableColumnsName;
+    }
+
     const columnsNotFound = columnsName?.filter(columnName => !tableColumnsName.includes(columnName));
     if (columnsNotFound?.length) {
       return { error: true, message: `Column(s) "${columnsNotFound.join('", "')}" do not exist in "${table.name}". Available columns: ${table.columns.map(column => `${column.name} (${column.type})`).join(', ')}`}
@@ -200,8 +204,7 @@ export class Database {
       return { error: true, message: `Column "${sort.columnName}" does not exist in "${table.name}". Available columns: ${table.columns.map(column => `${column.name} (${column.type})`).join(', ')}`}
     }
 
-    const query = `SELECT ${['rowID as id', columnsName].join(', ')} FROM ${table.name}${sort?.columnName ? ` ORDER BY ${sort.columnName} ${sort.sortType}` : ''} LIMIT ${limit}`;
-
+    const query = `SELECT ${['rowID AS id', ...(columnsName ?? [])].join(', ')} FROM ${table.name} ORDER BY ${sort?.columnName ? `${sort.columnName} ${sort.sortType}` : 'rowID ASC'}${limit !== undefined ? ` LIMIT ${limit}` : ''}`;
     const dbResponse: Object[] | DatabaseError = await new Promise((resolve, reject) => {
       this.db.all(query, (err, rows: Object[]) => {
         if (err) resolve({ error: true, message: err.message });
@@ -210,7 +213,6 @@ export class Database {
     });    
 
     if ((dbResponse as DatabaseError).error) return dbResponse;
-    console.log(dbResponse);
     
     return (dbResponse as Object[]).map(rowResponse => {
       Object.keys(rowResponse).forEach(key => {
@@ -233,6 +235,30 @@ export class Database {
         }
       });
       return rowResponse
+    });
+  }
+
+  public async deleteRowByID(tableName: string, id: number): Promise<DatabaseError> {
+    const table = await this.getTableModel(tableName);
+    if (!table) return { error: true, message: `Table "${tableName}" does not exist` };
+
+    const countQuery = `SELECT COUNT(*) AS count FROM ${tableName} WHERE rowID=${id}`;
+    const deleteQuery = `DELETE FROM ${tableName} WHERE rowID=${id}`;
+    
+    const countCheck: DatabaseError = await new Promise((resolve, reject) => {
+      this.db.get(countQuery, (err, row: any) => {
+        if (err) return resolve({ error: true, message: err.message});
+        if (row.count <= 0) return resolve({ error: true, message: `Row was not found with the id of "${id}"` });
+        return resolve({});
+      });
+    });
+    if (countCheck.error) return countCheck;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(deleteQuery, (err) => {
+        if (err) return resolve({ error: true, message: err.message});
+        return resolve({});
+      });
     });
   }
 }

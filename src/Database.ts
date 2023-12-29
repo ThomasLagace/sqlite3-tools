@@ -200,7 +200,7 @@ export class Database {
       return { error: true, message: `Column "${sort.columnName}" does not exist in "${table.name}". Available columns: ${table.columns.map(column => `${column.name} (${column.type})`).join(', ')}`}
     }
 
-    const query = `SELECT ${columnsName?.join(', ')} FROM ${table.name}${sort?.columnName ? ` ORDER BY ${sort.columnName} ${sort.sortType}` : ''} LIMIT ${limit}`;
+    const query = `SELECT ${['rowID as id', columnsName].join(', ')} FROM ${table.name}${sort?.columnName ? ` ORDER BY ${sort.columnName} ${sort.sortType}` : ''} LIMIT ${limit}`;
 
     const dbResponse: Object[] | DatabaseError = await new Promise((resolve, reject) => {
       this.db.all(query, (err, rows: Object[]) => {

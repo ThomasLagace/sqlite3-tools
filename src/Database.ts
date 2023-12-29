@@ -114,15 +114,14 @@ export class Database {
     }
   }
 
-  public async insertRows(tablesNames: string[], data: { [key: string]: any}[]): Promise<DatabaseError> {
-    return await new Promise((resolve, reject) => {
-      tablesNames.forEach(async (table, index) => {
-        const errorMessage = await this.insertRow(table, data[index]);
-        if (errorMessage) {
-          reject({ error: true, message: errorMessage.message });
-        }
-      });
-      resolve({})
+  public async insertRows(tablesName: string, data: { [key: string]: any}[]): Promise<DatabaseError> {
+    return await new Promise(async (resolve, reject) => {
+      for (let i = 0; i < data.length; i++) {
+        const rowData = data[i];
+        const dbResponse = await this.insertRow(tablesName, rowData);
+        if (dbResponse.error) return resolve(dbResponse);
+      }
+      return resolve({});
     });
   }
 

@@ -151,6 +151,8 @@ export class Database {
           return JSON.stringify(dataColumn);
         case 'date':
           return dataColumn.toISOString();
+        case 'int':
+          return Math.floor(dataColumn);
         default:
           return dataColumn;
       }
@@ -177,6 +179,60 @@ export class Database {
         this.tables = this.tables.filter(t => t.name !== tableName);
         return resolve({});
       });
+    });
+  }
+
+  public async getTable(tableName: string, columnsName: string[] | undefined = undefined, sort: { columnName: string, sortType: 'ASC' | 'DESC' } | undefined = undefined, limit: number = 1): Promise<Object[] | DatabaseError> {
+    const table = await this.getTableModel(tableName);
+    if (!table) return { error: true, message: `Table "${tableName}" does not exist` };
+
+    if (limit < 1) {
+      return { error: true, message: `Limit must be greater than 0 but got "${limit}"`}
+    }
+
+    const tableColumnsName = table.columns.map(column => column.name);
+    const columnsNotFound = columnsName?.filter(columnName => !tableColumnsName.includes(columnName));
+    if (columnsNotFound?.length) {
+      return { error: true, message: `Column(s) "${columnsNotFound.join('", "')}" do not exist in "${table.name}". Available columns: ${table.columns.map(column => `${column.name} (${column.type})`).join(', ')}`}
+    }
+    
+    if (sort?.columnName && !tableColumnsName.includes(sort?.columnName)) {
+      return { error: true, message: `Column "${sort.columnName}" does not exist in "${table.name}". Available columns: ${table.columns.map(column => `${column.name} (${column.type})`).join(', ')}`}
+    }
+
+    const query = `SELECT ${columnsName?.join(', ')} FROM ${table.name}${sort?.columnName ? ` ORDER BY ${sort.columnName} ${sort.sortType}` : ''} LIMIT ${limit}`;
+
+    const dbResponse: Object[] | DatabaseError = await new Promise((resolve, reject) => {
+      this.db.all(query, (err, rows: Object[]) => {
+        if (err) resolve({ error: true, message: err.message });
+        resolve(rows);
+      });
+    });    
+
+    if ((dbResponse as DatabaseError).error) return dbResponse;
+    console.log(dbResponse);
+    
+    return (dbResponse as Object[]).map(rowResponse => {
+      Object.keys(rowResponse).forEach(key => {
+        const columnModel = table.columns.find(column => column.name == key);
+        const columnValue = (rowResponse as any)[key];
+        if (columnValue === 'NULL') return (rowResponse as any)[key] = null;
+        switch (columnModel?.type) {
+          case 'array':
+          case 'object':
+            return (rowResponse as any)[key] = JSON.parse(columnValue);
+          case 'int':
+          case 'real':
+            return (rowResponse as any)[key] = Number(columnValue);
+          case 'boolean':
+            return (rowResponse as any)[key] = Boolean(columnValue);
+          case 'date':
+            return (rowResponse as any)[key] = new Date(Date.parse(columnValue));
+          default:
+            return rowResponse;
+        }
+      });
+      return rowResponse
     });
   }
 }

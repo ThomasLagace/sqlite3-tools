@@ -29,10 +29,22 @@ const testing = async () => {
       realTest: 2.56,
     })
   );
+  
+  console.log("log: ", 
+    await db.insertRow("test",
+    {
+      boolTest: false,
+      dateTest: new Date(),
+      objectTest: {hello: "monde"},
+      stringTest: "lllllllDFS123",
+      intTest: 9,
+      realTest: 6.18,
+    })
+  );
 
-  console.log("log: ", await db.dropTable('test'));
+  console.log('Log: ', await db.getTable('test', [ 'boolTest', 'arrayTest', 'stringTest' ], undefined, 10));
 
-  console.log(db.tables);
+  // console.log(db.tables);
 
   db.db.close();
 }
